@@ -16,7 +16,7 @@ struct AssetCatalog {
     let URL: NSURL
     let name: String
     private let tree: FSTree
-    
+
     /// Failable initializer that returns `nil` if the URL cannot be accessed.
     init?(URL: NSURL, error: NSErrorPointer) {
         if let tree = FSTree(URL: URL, error: error) {
@@ -36,14 +36,14 @@ struct AssetCatalog {
 private func isValidImageSet(#tree: FSTree) -> Bool {
     if (tree.URL.pathExtension == ImagesetFileExtension) {
         /* Originally written as:
-        
+
            return elementPassingTest(tree.children) { $0.URL.lastPathComponent == "Contents.json" }
                     .chainMap { $0.URL }
                     .chainMap { NSData(contentsOfURL: $0) }
                     .chainMap { NSJSONSerialization.JSONObjectWithData($0, options: .allZeros, error: nil) as? NSDictionary }
                     .chainMap { $0["images"] as? [NSDictionary] }
                     .chainMap { elementPassingTest($0) { $0["filename"] != nil } } != nil
-        
+
           This kills the compiler/indexer. (Xcode 6.1.1, Swift 1.1)
         */
         if let contentsURL = elementPassingTest(tree.children, { $0.URL.lastPathComponent == "Contents.json" })?.URL {
@@ -84,15 +84,22 @@ private func _generateCode(platform: Platform, tree: FSTree, level: Int) -> Stri
         case .OSX: return "NSImage"
         }
     }()
-    
+
     let indentNewline: String -> String = { $0.indent(level) + "\n" }
-    
+
     if tree.URL.pathExtension == ImagesetFileExtension {
-        return indentNewline("static var \(camelCaseName): \(imageClass) { return \(imageClass)(named: \"\(name)\")! }")
+        return indentNewline("case \(camelCaseName) = \"\(name)\"")
+
     } else {
         let name = level == 0 ? (camelCaseName + NameSuffix) : camelCaseName
-        var code = indentNewline("struct \(name) {")
+        var code = indentNewline("enum \(name): String {")
         code += reduce(tree.children, "", { $0 + _generateCode(platform, $1, level + 1) })
+
+        code += indentNewline("")
+        code += indentNewline("\tfunc toImage() -> UIImage {")
+        code += indentNewline("\t\treturn UIImage(named: self.rawValue)!")
+        code += indentNewline("\t}")
+
         code += indentNewline("}")
         return code
     }
